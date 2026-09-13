@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stick Fights</title>
+    <style>
+        body { background: #121212; color: #fff; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 8px; overflow: hidden; user-select: none; }
+        h1 { margin: 4px 0 8px 0; font-size: 22px; letter-spacing: 1px; color: #ff0044; text-shadow: 0 0 10px rgba(255,0,68,0.5); }
+        
+        canvas { border: 3px solid #333; border-radius: 12px; display: block; margin: 0 auto; box-shadow: 0 12px 28px rgba(0,0,0,0.7); }
+        
+        .hud { font-size: 14px; font-weight: 700; margin-bottom: 8px; display: flex; justify-content: center; gap: 16px; align-items: center; background: #1e1e1e; padding: 8px 16px; border-radius: 20px; width: fit-content; margin-left: auto; margin-right: auto; border: 1px solid #333; }
+        .bar-container { width: 130px; background: #2a2a2a; border-radius: 8px; height: 14px; overflow: hidden; border: 1px solid #444; display: inline-block; vertical-align: middle; margin-left: 6px; }
+        .bar-fill { height: 100%; transition: width 0.15s ease-out; }
+        .hp-fill { background: linear-gradient(90deg, #ff3333, #ff6666); }
+        .xp-fill { background: linear-gradient(90deg, #00e640, #00ff88); }
+        .controls { color: #888; font-size: 12px; margin-top: 6px; }
+        .controls b { color: #ccc; }
+
+        /* Modals & Menus */
+        #shopMenu { display: none; position: absolute; top: 60px; left: 50%; transform: translateX(-50%); width: 520px; background: rgba(20,20,22,0.96); backdrop-filter: blur(8px); border: 2px solid #ff0044; border-radius: 14px; padding: 20px; box-shadow: 0 0 30px rgba(255,0,68,0.4); z-index: 10; }
+        .char-card { border: 1px solid #333; border-radius: 10px; padding: 10px 14px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; background: #1a1a1c; }
+        
+        button { background: #ff0044; color: #fff; border: none; padding: 8px 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: transform 0.1s, background 0.2s; }
+        button:hover { background: #ff2266; transform: scale(1.03); }
+        button:active { transform: scale(0.97); }
+        button:disabled { background: #444; cursor: not-allowed; transform: none; color: #888; }
+
+        #checkoutModal { display: none; position: absolute; top: 40px; left: 50%; transform: translateX(-50%); width: 340px; background: #141416; border: 2px solid #00e640; border-radius: 14px; padding: 20px; box-shadow: 0 0 35px rgba(0,230,64,0.3); z-index: 30; text-align: left; }
+        #checkoutModal input { width: 92%; padding: 8px; margin: 6px 0 12px 0; background: #222; border: 1px solid #444; color: #fff; border-radius: 6px; outline: none; }
+
+        #respawnOverlay { display: none; position: absolute; top: 120px; left: 50%; transform: translateX(-50%); width: 320px; background: rgba(15,15,15,0.95); border: 2px solid #ff3333; border-radius: 14px; padding: 24px; box-shadow: 0 0 40px rgba(255,51,51,0.5); z-index: 40; }
+
+        #announcement { display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #ff0055; color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 18px; box-shadow: 0 0 25px #ff0055; z-index: 20; animation: popIn 0.3s ease-out; }
+        @keyframes popIn { from { transform: translateX(-50%) scale(0.5); } to { transform: translateX(-50%) scale(1); } }
+        
+        .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+        .tab-btn { background: #2a2a2c; padding: 8px 12px; flex: 1; border-radius: 6px; color: #aaa; font-weight: bold; }
+        .tab-btn.active { background: #ff0044; color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="announcement">👑 RARE DROP UNLOCKED! 👑</div>
+
+    <h1>STICK FIGHTS: THE CHOSEN ONE</h1>
+    
+    <div class="hud">
+        <div>HP <div class="bar-container"><div id="hpBar" class="bar-fill hp-fill"></div></div></div>
+        <div id="level" style="color: #ffcc00;">Lvl 1</div>
+        <div id="belt" style="color: #ffffff;">White Belt</div>
+        <div>XP <div class="bar-container"><div id="xpBar" class="bar-fill xp-fill"></div></div></div>
+        <div id="coins" style="color: #ffaa00;">💰 0</div>
+    </div>
+
+    <!-- Defeat / Respawn Screen -->
+    <div id="respawnOverlay">
+        <h2 style="color: #ff3333; margin-top: 0; font-size: 26px;">DEFEATED</h2>
+        <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">Enemies have reset to Level 1 strength!</p>
+        <button onclick="respawnPlayer()" style="width: 100%; padding: 12px; font-size: 16px; background: #00e640; color: #000;">Respawn & Fight</button>
+    </div>
+
+    <!-- Pretend Bank Checkout -->
+    <div id="checkoutModal">
+        <h2 style="margin-top:0; color:#00e640; font-size: 18px;">💳 Bank Checkout ($0.99)</h2>
+        <p style="font-size:12px; color:#aaa;">Unlock 10x Damage Premium Dark Lord</p>
+        <form onsubmit="processPayment(event)">
+            <label style="font-size:11px; color:#888;">Cardholder Name</label>
+            <input type="text" placeholder="John Doe" required />
+            <label style="font-size:11px; color:#888;">Card Number</label>
+            <input type="text" placeholder="4532 •••• •••• 8899" required />
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1;">
+                    <label style="font-size:11px; color:#888;">Exp Date</label>
+                    <input type="text" placeholder="MM/YY" required />
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:11px; color:#888;">CVC</label>
+                    <input type="text" placeholder="123" required />
+                </div>
+            </div>
+            <button type="submit" style="width:100%; background:#00e640; color:#000; padding:10px; font-size:15px;">Complete $0.99 Purchase</button>
+            <button type="button" onclick="closeCheckout()" style="width:100%; background:#333; color:#fff; margin-top:8px;">Cancel</button>
+        </form>
+    </div>
+
+    <!-- Shop / Inventory Menu -->
+    <div id="shopMenu">
+        <div class="tabs">
+            <button class="tab-btn active" id="tabChar" onclick="switchTab('characters')">Characters</button>
+            <button class="tab-btn" id="tabShop" onclick="switchTab('shop')">Upgrades</button>
+            <button class="tab-btn" id="tabInv" onclick="switchTab('inventory')">Inventory</button>
+        </div>
+
+        <div id="charactersTab">
+            <h2>Character Selection</h2>
+            <div class="char-card">
+                <div>
+                    <h3 style="margin:0; color:#00d2ff;">The Chosen One</h3>
+                    <small style="color:#aaa;">Balanced Combat & Fireball Powers</small>
+                </div>
+                <button onclick="selectChar('chosen')">Select</button>
+            </div>
+            <div class="char-card">
+                <div>
+                    <h3 style="margin:0; color:#ff0044;">The Dark Lord (Free)</h3>
+                    <small id="darkLordSub" style="color:#aaa;">Unlocks at Black Belt (Lvl 41) - Red Warrior</small>
+                </div>
+                <button id="darkLordBtn" disabled onclick="selectChar('dark')">Locked</button>
+            </div>
+            <div class="char-card" style="border-color: #00e640;">
+                <div>
+                    <h3 style="margin:0; color:#ff0044;">Premium Dark Lord ⚡</h3>
+                    <small style="color:#aaa;">Instant Unlock + <b>10x DAMAGE</b> Multiplier</small>
+                </div>
+                <button id="buyPaidDarkBtn" style="background:#00e640; color:#000;" onclick="openCheckout()">Buy ($0.99)</button>
+            </div>
+        </div>
+
+        <div id="shopTab" style="display:none;">
+            <h2>Coin Power-Ups</h2>
+            <div class="char-card">
+                <div>
+                    <h3 style="margin:0; color:#00e640;">Max HP Boost (+25)</h3>
+                    <small id="hpCostText" style="color:#aaa;">Cost: 100 Coins</small>
+                </div>
+                <button onclick="buyPowerUp('hp')">Buy</button>
+            </div>
+            <div class="char-card">
+                <div>
+                    <h3 style="margin:0; color:#ff7b00;">Attack Power (+5 Dmg)</h3>
+                    <small id="dmgCostText" style="color:#aaa;">Cost: 150 Coins</small>
+                </div>
+                <button onclick="buyPowerUp('dmg')">Buy</button>
+            </div>
+            <div class="char-card">
+                <div>
+                    <h3 style="margin:0; color:#00d2ff;">Speed Boost (+1 Speed)</h3>
+                    <small id="spdCostText" style="color:#aaa;">Cost: 200 Coins</small>
+                </div>
+                <button onclick="buyPowerUp('spd')">Buy</button>
+            </div>
+        </div>
+
+        <div id="inventoryTab" style="display:none;">
+            <h2>Inventory</h2>
+            <div class="char-card" id="viraCard" style="display:none; border-color:#ff0044;">
+                <div>
+                    <h3 style="margin:0; color:#ff0044;">Vira Wristband 🖤🔴 (1% Drop)</h3>
+                    <small style="color:#aaa;">Black wristband with red outline. Grants Ground Spikes (V Key)</small>
+                </div>
+                <button id="equipViraBtn" onclick="toggleEquipVira('normal')">Equip</button>
+            </div>
+            <div class="char-card" id="supremeViraCard" style="display:none; border-color:#ff00aa;">
+                <div>
+                    <h3 style="margin:0; color:#ff00aa;">Supreme Vira Wristband ✨ (0.1% Drop)</h3>
+                    <small style="color:#aaa;">Black wristband with magenta glow. Fires Spike Projectiles!</small>
+                </div>
+                <button id="equipSupremeViraBtn" onclick="toggleEquipVira('supreme')">Equip</button>
+            </div>
+            <p id="emptyInvText" style="color:#777;">No items yet! Defeat NPCs to roll for rare drops.</p>
+        </div>
+
+        <p style="font-size:12px; color:#888; margin-top:15px;">Press <b>B</b> to Resume</p>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <p class="controls"><b>A/D</b>: Walk | <b>W</b>: Jump | <b>J</b>: Punch | <b>K</b>: Fireball | <b>E</b>: Shield | <b>Q</b>: Slam/Pillar | <b>V</b>: Vira Spike | <b>B</b>: Shop Menu</p>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Audio System Synthesizer
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function initAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+
+            if (type === 'punch') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.08);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.08);
+            } else if (type === 'fireball') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'hit') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(120, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'slam') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(10, now + 0.35);
+                gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.35);
+            } else if (type === 'defeat') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.5);
+                gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.5);
+            } else if (type === 'levelup') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(440, now);
+                osc.frequency.setValueAtTime(554, now + 0.1); osc.frequency.setValueAtTime(659, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.35);
+            }
+        }
+
+        let level = 1; let xp = 0; let maxXp = 100; let coins = 0;
+        let selectedCharacter = 'chosen';
+        let isPaused = false; let isDead = false;
+        
+        let npcKillStreak = 0;
+        let hasViraBand = false; let hasSupremeVira = false;
+        let equippedBand = 'none'; let paidDarkUnlocked = false;
+
+        let bonusHp = 0; let bonusDmg = 0; let bonusSpeed = 0;
+        let hpUpgradeCost = 100; let dmgUpgradeCost = 150; let spdUpgradeCost = 200;
+
+        let screenShake = 0; let hitStopTimer = 0;
+        let particles = []; let floatText = [];
+
+        const belts = ["White Belt", "Yellow Belt", "Orange Belt", "Green Belt", "Blue Belt", "Purple Belt", "Brown Belt", "Red Belt", "Black Belt"];
+        const beltColors = ["#ffffff", "#ffe600", "#ff7b00", "#00e640", "#0088ff", "#9900ff", "#8b4513", "#ff0044", "#111111"];
+
+        let player = {
+            x: 100, y: 290, vx: 0, vy: 0,
+            hp: 100, maxHp: 100, grounded: false, facing: 1,
+            isPunching: false, punchTimer: 0, animFrame: 0,
+            shieldActive: false, shieldTimer: 0
+        };
+
+        let enemies = []; let fireballs = []; let shockwaves = [];
+        let pillars = []; let viraSpikes = []; let supremeSpikes = [];
+        const keys = {};
+
+        function addHitParticles(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8,
+                    life: 15, color: color || '#ffcc00'
+                });
+            }
+        }
+
+        function addFloatingText(x, y, text, color) {
+            floatText.push({ x: x, y: y, text: text, color: color || '#ffffff', life: 30 });
+        }
+
+        function saveGame() {
+            const gameData = {
+                level, xp, maxXp, coins, selectedCharacter,
+                hasViraBand, hasSupremeVira, equippedBand,
+                paidDarkUnlocked, bonusHp, bonusDmg, bonusSpeed,
+                hpUpgradeCost, dmgUpgradeCost, spdUpgradeCost
+            };
+            localStorage.setItem('stickFightsSave', JSON.stringify(gameData));
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem('stickFightsSave');
+            if (saved) {
+                const data = JSON.parse(saved);
+                level = data.level || 1; xp = data.xp || 0; maxXp = data.maxXp || 100; coins = data.coins || 0;
+                selectedCharacter = data.selectedCharacter || 'chosen';
+                hasViraBand = data.hasViraBand || false; hasSupremeVira = data.hasSupremeVira || false;
+                equippedBand = data.equippedBand || 'none'; paidDarkUnlocked = data.paidDarkUnlocked || false;
+                bonusHp = data.bonusHp || 0; bonusDmg = data.bonusDmg || 0; bonusSpeed = data.bonusSpeed || 0;
+                hpUpgradeCost = data.hpUpgradeCost || 100; dmgUpgradeCost = data.dmgUpgradeCost || 150; spdUpgradeCost = data.spdUpgradeCost || 200;
+                updateInventoryUI();
+            }
+            updateHUD();
+        }
+
+        function updateInventoryUI() {
+            if (hasViraBand || hasSupremeVira) document.getElementById('emptyInvText').style.display = 'none';
+            if (hasViraBand) {
+                document.getElementById('viraCard').style.display = 'flex';
+                document.getElementById('equipViraBtn').innerText = equippedBand === 'normal' ? "Equipped" : "Equip";
+            }
+            if (hasSupremeVira) {
+                document.getElementById('supremeViraCard').style.display = 'flex';
+                document.getElementById('equipSupremeViraBtn').innerText = equippedBand === 'supreme' ? "Equipped" : "Equip";
+            }
+        }
+
+        function getBeltIndex() { return Math.min(Math.floor((level - 1) / 5), belts.length - 1); }
+
+        function getDamageMultiplier() {
+            let beltMult = 1 + (getBeltIndex() * 0.25);
+            let charMult = 1;
+            if (selectedCharacter === 'dark') charMult = 2;
+            if (selectedCharacter === 'paid_dark') charMult = 10;
+            return beltMult * charMult;
+        }
+
+        function spawnEnemy() {
+            if (!isPaused && !isDead && enemies.length < 3) {
+                let scalingFactor = Math.floor((level - 1) / 5) + Math.floor(npcKillStreak / 3);
+                let baseHp = 50 + (scalingFactor * 35);
+                let baseDmg = 8 + (scalingFactor * 4);
+                let baseSpeed = Math.min(5.5, 2 + (scalingFactor * 0.3));
+
+                enemies.push({
+                    x: Math.random() > 0.5 ? 750 : 50, y: 290,
+                    hp: baseHp, maxHp: baseHp, facing: -1,
+                    isPunching: false, punchTimer: 0, cooldown: 0,
+                    speed: baseSpeed, damage: baseDmg
+                });
+            }
+        }
+        setInterval(spawnEnemy, 3200);
+        spawnEnemy();
+
+        function triggerGameOver() {
+            isDead = true; isPaused = true;
+            playSound('defeat');
+            document.getElementById('respawnOverlay').style.display = 'block';
+        }
+
+        function respawnPlayer() {
+            isDead = false; isPaused = false;
+            npcKillStreak = 0;
+            enemies = [];
+            player.hp = player.maxHp;
+            player.x = 100; player.y = 290; player.vx = 0; player.vy = 0;
+            document.getElementById('respawnOverlay').style.display = 'none';
+            updateHUD();
+            spawnEnemy();
+        }
+
+        function switchTab(tab) {
+            document.getElementById('charactersTab').style.display = tab === 'characters' ? 'block' : 'none';
+            document.getElementById('shopTab').style.display = tab === 'shop' ? 'block' : 'none';
+            document.getElementById('inventoryTab').style.display = tab === 'inventory' ? 'block' : 'none';
+            document.getElementById('tabChar').className = `tab-btn ${tab === 'characters' ? 'active' : ''}`;
+            document.getElementById('tabShop').className = `tab-btn ${tab === 'shop' ? 'active' : ''}`;
+            document.getElementById('tabInv').className = `tab-btn ${tab === 'inventory' ? 'active' : ''}`;
+        }
+
+        function selectChar(char) { selectedCharacter = char; saveGame(); toggleMenu(); }
+        function openCheckout() { document.getElementById('checkoutModal').style.display = 'block'; }
+        function closeCheckout() { document.getElementById('checkoutModal').style.display = 'none'; }
+
+        function processPayment(e) {
+            e.preventDefault(); paidDarkUnlocked = true; selectedCharacter = 'paid_dark';
+            closeCheckout(); saveGame(); updateHUD(); playSound('levelup');
+            alert("Payment Approved! Premium Dark Lord Unlocked ($0.99)");
+            toggleMenu();
+        }
+
+        function buyPowerUp(type) {
+            if (type === 'hp' && coins >= hpUpgradeCost) {
+                coins -= hpUpgradeCost; bonusHp += 25; hpUpgradeCost = Math.floor(hpUpgradeCost * 1.5);
+            } else if (type === 'dmg' && coins >= dmgUpgradeCost) {
+                coins -= dmgUpgradeCost; bonusDmg += 5; dmgUpgradeCost = Math.floor(dmgUpgradeCost * 1.5);
+            } else if (type === 'spd' && coins >= spdUpgradeCost) {
+                coins -= spdUpgradeCost; bonusSpeed += 1; spdUpgradeCost = Math.floor(spdUpgradeCost * 1.5);
+            }
+            saveGame(); updateHUD(); playSound('levelup');
+        }
+
+        function toggleEquipVira(type) {
+            equippedBand = (equippedBand === type) ? 'none' : type;
+            updateInventoryUI(); saveGame();
+        }
+
+        function toggleMenu() {
+            if (isDead) return;
+            let shop = document.getElementById('shopMenu');
+            isPaused = !isPaused;
+            shop.style.display = isPaused ? 'block' : 'none';
+            if (!isPaused) closeCheckout();
+            if (isPaused) { for (let k in keys) keys[k] = false; }
+        }
+
+        function triggerRareDrop(type) {
+            let banner = document.getElementById('announcement');
+            playSound('levelup');
+            if (type === 'supreme') {
+                hasSupremeVira = true; banner.innerText = "✨ MYTHIC 0.1% DROP! SUPREME VIRA BAND! ✨";
+            } else {
+                hasViraBand = true; banner.innerText = "👑 RARE DROP! VIRA BAND UNLOCKED! 👑";
+            }
+            updateInventoryUI(); banner.style.display = 'block';
+            setTimeout(() => banner.style.display = 'none', 4000);
+            saveGame();
+        }
+
+        window.addEventListener('keydown', e => {
+            initAudio();
+            let key = e.key.toLowerCase();
+            keys[key] = true;
+
+            if (key === 'b') toggleMenu();
+            if (isPaused || isDead) return;
+
+            let mult = getDamageMultiplier();
+
+            if (key === 'k') {
+                playSound('fireball');
+                fireballs.push({
+                    x: player.x + (player.facing * 20), y: player.y - 15,
+                    vx: player.facing * 11, radius: selectedCharacter.includes('dark') ? 12 : 8,
+                    color: selectedCharacter.includes('dark') ? '#ff0044' : '#ff4500',
+                    damage: (25 + bonusDmg) * mult
+                });
+            }
+
+            if (key === 'j' && !player.isPunching) {
+                player.isPunching = true; player.punchTimer = 10;
+                playSound('punch');
+                let baseDmg = (16 + bonusDmg) * mult;
+                enemies.forEach(e => {
+                    let dist = Math.abs((player.x + player.facing * 25) - e.x);
+                    if (dist < 40 && Math.abs(player.y - e.y) < 30) {
+                        e.hp -= baseDmg; e.x += player.facing * 12;
+                        playSound('hit');
+                        addHitParticles(e.x, e.y - 20, '#ffcc00');
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(baseDmg)}`, '#ff4444');
+                        hitStopTimer = 2; screenShake = 4;
+                    }
+                });
+            }
+
+            if (key === 'e') { player.shieldActive = true; player.shieldTimer = 180; }
+
+            if (key === 'q' && player.grounded) {
+                playSound('slam'); screenShake = 10;
+                if (selectedCharacter.includes('dark')) {
+                    pillars.push({ x: player.x + (player.facing * 80), width: 50, timer: 40, hitEnemies: [], damage: (45 + bonusDmg) * mult });
+                } else {
+                    shockwaves.push({ x: player.x, y: 330, radius: 10, maxRadius: 130, speed: 7, hitEnemies: [], damage: (30 + bonusDmg) * mult });
+                }
+            }
+
+            if (key === 'v') {
+                if (equippedBand === 'supreme') {
+                    playSound('fireball');
+                    supremeSpikes.push({ x: player.x + (player.facing * 20), y: player.y - 15, vx: player.facing * 16, damage: (100 + bonusDmg) * mult });
+                } else if (equippedBand === 'normal' && selectedCharacter.includes('dark') && player.grounded) {
+                    playSound('slam');
+                    viraSpikes.push({ x: player.x + (player.facing * 40), facing: player.facing, length: 0, maxLength: 250, hitEnemies: [], damage: (65 + bonusDmg) * mult });
+                }
+            }
+        });
+
+        window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+        function addXP(amount) {
+            xp += amount;
+            if (xp >= maxXp) {
+                xp -= maxXp; level++; maxXp = Math.floor(maxXp * 1.2);
+                playSound('levelup');
+                addFloatingText(player.x, player.y - 50, "LEVEL UP!", "#00ff88");
+            }
+            saveGame(); updateHUD();
+        }
+
+        function updateHUD() {
+            let beltIdx = getBeltIndex();
+            player.maxHp = 100 + (beltIdx * 20) + bonusHp;
+            if (player.hp > player.maxHp) player.hp = player.maxHp;
+
+            document.getElementById('level').innerText = `Lvl ${level}`;
+            document.getElementById('coins').innerText = `💰 ${coins}`;
+            
+            let hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('hpBar').style.width = `${hpPct}%`;
+
+            let xpPct = Math.min(100, (xp / maxXp) * 100);
+            document.getElementById('xpBar').style.width = `${xpPct}%`;
+
+            let beltElement = document.getElementById('belt');
+            beltElement.innerText = belts[beltIdx];
+            beltElement.style.color = beltColors[beltIdx];
+
+            let darkBtn = document.getElementById('darkLordBtn');
+            if (level >= 41) {
+                darkBtn.disabled = false;
+                darkBtn.innerText = selectedCharacter === 'dark' ? "Selected" : "Select";
+            } else {
+                darkBtn.disabled = true; darkBtn.innerText = "Locked";
+            }
+
+            let paidBtn = document.getElementById('buyPaidDarkBtn');
+            if (paidDarkUnlocked) {
+                paidBtn.innerText = selectedCharacter === 'paid_dark' ? "Selected" : "Select";
+                paidBtn.onclick = () => selectChar('paid_dark');
+            }
+
+            document.getElementById('hpCostText').innerText = `Cost: ${hpUpgradeCost} Coins`;
+            document.getElementById('dmgCostText').innerText = `Cost: ${dmgUpgradeCost} Coins`;
+            document.getElementById('spdCostText').innerText = `Cost: ${spdUpgradeCost} Coins`;
+        }
+
+        function update() {
+            if (isPaused || isDead) return;
+
+            if (hitStopTimer > 0) { hitStopTimer--; return; }
+            if (screenShake > 0.5) screenShake *= 0.85;
+
+            let currentSpeed = 4 + bonusSpeed;
+            if (keys['a'] && !keys['d']) { player.vx = -currentSpeed; player.facing = -1; player.animFrame += 0.2; }
+            else if (keys['d'] && !keys['a']) { player.vx = currentSpeed; player.facing = 1; player.animFrame += 0.2; }
+            else { player.vx = 0; player.animFrame = 0; }
+
+            if (keys['w'] && player.grounded) { player.vy = -12; player.grounded = false; }
+
+            player.vy += 0.6; player.x += player.vx; player.y += player.vy;
+            if (player.y >= 290) { player.y = 290; player.vy = 0; player.grounded = true; }
+
+            if (player.isPunching) { player.punchTimer--; if (player.punchTimer <= 0) player.isPunching = false; }
+            if (player.shieldActive) { player.shieldTimer--; if (player.shieldTimer <= 0) player.shieldActive = false; }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = floatText.length - 1; i >= 0; i--) {
+                let ft = floatText[i]; ft.y -= 1; ft.life--;
+                if (ft.life <= 0) floatText.splice(i, 1);
+            }
+
+            for (let i = fireballs.length - 1; i >= 0; i--) {
+                let fb = fireballs[i]; fb.x += fb.vx;
+                enemies.forEach(e => {
+                    if (Math.abs(fb.x - e.x) < 20 && Math.abs(fb.y - (e.y - 15)) < 30) {
+                        e.hp -= fb.damage; playSound('hit');
+                        addHitParticles(e.x, e.y - 20, fb.color);
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(fb.damage)}`, '#ffaa00');
+                        fireballs.splice(i, 1);
+                    }
+                });
+                if (fb.x < 0 || fb.x > canvas.width) fireballs.splice(i, 1);
+            }
+
+            for (let i = supremeSpikes.length - 1; i >= 0; i--) {
+                let sp = supremeSpikes[i]; sp.x += sp.vx;
+                enemies.forEach(e => {
+                    if (Math.abs(sp.x - e.x) < 25 && Math.abs(sp.y - (e.y - 15)) < 35) {
+                        e.hp -= sp.damage; playSound('hit');
+                        addHitParticles(e.x, e.y - 20, '#ff00aa');
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(sp.damage)}`, '#ff00aa');
+                    }
+                });
+                if (sp.x < 0 || sp.x > canvas.width) supremeSpikes.splice(i, 1);
+            }
+
+            for (let i = shockwaves.length - 1; i >= 0; i--) {
+                let sw = shockwaves[i]; sw.radius += sw.speed;
+                enemies.forEach(e => {
+                    let d = Math.abs(sw.x - e.x);
+                    if (Math.abs(d - sw.radius) < 20 && !sw.hitEnemies.includes(e)) {
+                        e.hp -= sw.damage; e.y -= 8; sw.hitEnemies.push(e); playSound('hit');
+                        addHitParticles(e.x, e.y - 20, '#ff7b00');
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(sw.damage)}`, '#ffaa00');
+                    }
+                });
+                if (sw.radius >= sw.maxRadius) shockwaves.splice(i, 1);
+            }
+
+            for (let i = pillars.length - 1; i >= 0; i--) {
+                let p = pillars[i]; p.timer--;
+                enemies.forEach(e => {
+                    if (Math.abs(e.x - p.x) < p.width && !p.hitEnemies.includes(e)) {
+                        e.hp -= p.damage; e.y -= 15; p.hitEnemies.push(e); playSound('hit');
+                        addHitParticles(e.x, e.y - 20, '#ff0044');
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(p.damage)}`, '#ff0044');
+                    }
+                });
+                if (p.timer <= 0) pillars.splice(i, 1);
+            }
+
+            for (let i = viraSpikes.length - 1; i >= 0; i--) {
+                let s = viraSpikes[i]; s.length += 15;
+                enemies.forEach(e => {
+                    let spikeEndX = s.x + (s.facing * s.length);
+                    if (Math.abs(e.x - spikeEndX) < 25 && !s.hitEnemies.includes(e)) {
+                        e.hp -= s.damage; e.y -= 20; s.hitEnemies.push(e); playSound('hit');
+                        addHitParticles(e.x, e.y - 20, '#ff0055');
+                        addFloatingText(e.x, e.y - 35, `-${Math.round(s.damage)}`, '#ff0055');
+                    }
+                });
+                if (s.length >= s.maxLength) viraSpikes.splice(i, 1);
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                if (e.hp <= 0) {
+                    enemies.splice(i, 1); coins += 25; npcKillStreak++; addXP(50);
+                    let roll = Math.random();
+                    if (roll < 0.001 && !hasSupremeVira) triggerRareDrop('supreme');
+                    else if (roll < 0.01 && !hasViraBand) triggerRareDrop('normal');
+                    continue;
+                }
+
+                let dist = player.x - e.x; e.facing = dist > 0 ? 1 : -1;
+                if (Math.abs(dist) > 30) e.x += e.facing * e.speed;
+                else if (e.cooldown <= 0) {
+                    e.isPunching = true; e.punchTimer = 10; e.cooldown = 45;
+                    if (!player.shieldActive) {
+                        player.hp = Math.max(0, player.hp - e.damage);
+                        playSound('hit'); screenShake = 6;
+                        addFloatingText(player.x, player.y - 35, `-${Math.round(e.damage)}`, '#ff2222');
+                        updateHUD();
+                        if (player.hp <= 0) triggerGameOver();
+                    }
+                }
+
+                if (e.cooldown > 0) e.cooldown--;
+                if (e.isPunching) { e.punchTimer--; if (e.punchTimer <= 0) e.isPunching = false; }
+            }
+        }
+
+        function draw() {
+            ctx.save();
+            if (screenShake > 0.5) {
+                let rx = (Math.random() - 0.5) * screenShake;
+                let ry = (Math.random() - 0.5) * screenShake;
+                ctx.translate(rx, ry);
+            }
+
+            ctx.fillStyle = '#6ab8c0'; ctx.fillRect(0, 0, canvas.width, 330);
+            ctx.fillStyle = '#53860d'; ctx.fillRect(0, 330, canvas.width, 70);
+            ctx.fillStyle = '#376005'; ctx.fillRect(0, 330, canvas.width, 8);
+
+            shockwaves.forEach(sw => {
+                ctx.strokeStyle = '#ff7b00'; ctx.lineWidth = 4; ctx.beginPath();
+                ctx.ellipse(sw.x, sw.y, sw.radius, sw.radius / 3, 0, 0, Math.PI * 2); ctx.stroke();
+            });
+
+            viraSpikes.forEach(s => {
+                ctx.fillStyle = '#ff0055';
+                for (let x = 0; x < s.length; x += 20) {
+                    let px = s.x + (s.facing * x);
+                    ctx.beginPath(); ctx.moveTo(px, 330); ctx.lineTo(px + (s.facing * 10), 280); ctx.lineTo(px + (s.facing * 20), 330); ctx.fill();
+                }
+            });
+
+            supremeSpikes.forEach(sp => {
+                ctx.fillStyle = '#ff00aa'; ctx.beginPath();
+                ctx.moveTo(sp.x, sp.y - 15); ctx.lineTo(sp.x + (sp.vx > 0 ? 30 : -30), sp.y); ctx.lineTo(sp.x, sp.y + 15); ctx.fill();
+            });
+
+            pillars.forEach(p => {
+                ctx.fillStyle = 'rgba(255, 0, 68, 0.7)'; ctx.fillRect(p.x - p.width / 2, 0, p.width, 330);
+            });
+
+            fireballs.forEach(fb => {
+                ctx.fillStyle = fb.color; ctx.beginPath(); ctx.arc(fb.x, fb.y, fb.radius, 0, Math.PI * 2); ctx.fill();
+            });
+
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); });
+
+            if (player.shieldActive) {
+                let time = Date.now() * 0.005;
+                for (let i = 0; i < 6; i++) {
+                    let angle = time + (i * Math.PI / 3);
+                    let sx = player.x + Math.cos(angle) * 35;
+                    let sy = (player.y - 15) + Math.sin(angle) * 35;
+                    ctx.fillStyle = selectedCharacter.includes('dark') ? '#ff0044' : '#ff3300';
+                    ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+
+            enemies.forEach(e => {
+                ctx.fillStyle = '#333'; ctx.fillRect(e.x - 20, e.y - 65, 40, 6);
+                ctx.fillStyle = '#ff3333'; ctx.fillRect(e.x - 20, e.y - 65, (e.hp / e.maxHp) * 40, 6);
+
+                ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(e.x, e.y - 40, 14, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(e.x, e.y - 26); ctx.lineTo(e.x, e.y + 10); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y - 15); ctx.lineTo(e.x + (e.facing * (e.isPunching ? 30 : 12)), e.y - (e.isPunching ? 15 : 5));
+                ctx.moveTo(e.x, e.y - 15); ctx.lineTo(e.x - (e.facing * 12), e.y - 5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(e.x, e.y + 10); ctx.lineTo(e.x - 10, e.y + 40);
+                ctx.moveTo(e.x, e.y + 10); ctx.lineTo(e.x + 10, e.y + 40); ctx.stroke();
+            });
+
+            let legOffset = Math.sin(player.animFrame) * 12;
+            let currentBeltColor = beltColors[getBeltIndex()];
+
+            ctx.strokeStyle = selectedCharacter.includes('dark') ? '#ff0044' : '#000000';
+            ctx.lineWidth = 4;
+
+            // Head
+            ctx.beginPath(); ctx.arc(player.x, player.y - 40, 14, 0, Math.PI * 2); ctx.stroke();
+
+            // Torso
+            ctx.beginPath(); ctx.moveTo(player.x, player.y - 26); ctx.lineTo(player.x, player.y + 10); ctx.stroke();
+
+            // Belt
+            ctx.strokeStyle = currentBeltColor; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(player.x - 8, player.y + 8); ctx.lineTo(player.x + 8, player.y + 8); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(player.x, player.y + 8); ctx.lineTo(player.x + (player.facing * 6), player.y + 20); ctx.stroke();
+
+            // Arms & Vira Wristband rendering
+            ctx.strokeStyle = selectedCharacter.includes('dark') ? '#ff0044' : '#000000';
+            ctx.lineWidth = 4;
+
+            let arm1StartX = player.x;
+            let arm1StartY = player.y - 15;
+            let arm1EndX = player.x + (player.facing * (player.isPunching ? 35 : 15)) - legOffset / 2;
+            let arm1EndY = player.y - (player.isPunching ? 15 : 5);
+
+            ctx.beginPath(); ctx.moveTo(arm1StartX, arm1StartY); ctx.lineTo(arm1EndX, arm1EndY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(player.x, player.y - 15); ctx.lineTo(player.x - (player.facing * 15) + legOffset / 2, player.y - 5); ctx.stroke();
+
+            // Draw Vira Wristband directly on front wrist
+            if (equippedBand !== 'none') {
+                let wristX = arm1StartX + (arm1EndX - arm1StartX) * 0.7;
+                let wristY = arm1StartY + (arm1EndY - arm1StartY) * 0.7;
+                
+                let outlineColor = equippedBand === 'supreme' ? '#ff00aa' : '#ff0033';
+                
+                // Outer Red / Magenta Glow Outline
+                ctx.fillStyle = outlineColor;
+                ctx.beginPath(); ctx.arc(wristX, wristY, 6.5, 0, Math.PI * 2); ctx.fill();
+                
+                // Inner Black Wristband
+                ctx.fillStyle = '#000000';
+                ctx.beginPath(); ctx.arc(wristX, wristY, 4, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Legs
+            ctx.beginPath();
+            if (!player.grounded) {
+                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x - 15, player.y + 30);
+                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x + 15, player.y + 35);
+            } else {
+                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x - 10 + legOffset, player.y + 40);
+                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x + 10 - legOffset, player.y + 40);
+            }
+            ctx.stroke();
+
+            floatText.forEach(ft => {
+                ctx.fillStyle = ft.color; ctx.font = 'bold 15px system-ui';
+                ctx.fillText(ft.text, ft.x - 10, ft.y);
+            });
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update(); draw(); requestAnimationFrame(gameLoop);
+        }
+
+        loadGame(); gameLoop();
+    </script>
+</body>
+</html>
